@@ -1,6 +1,7 @@
 import {DateTime} from "luxon";
 import * as Discord from "discord.js";
 import youtubeDownload from "ytdl-core";
+import config from "./config.json"
 import youtubeStream from "youtube-audio-stream";
 
 const logPrefix = "[" + DateTime.local().toLocaleString(DateTime.DATETIME_MED) + "] ";
@@ -18,7 +19,7 @@ client.once('ready', () => {
     console.log(`${logPrefix}Up and Running!`);
 });
 
-client.login('NzY2MDEzODYyMTQyNDEwNzYy.X4dMAA.qEQoBqRTE8fOgKPjIQUuj5eyVs0');
+client.login(config.token);
 client.on('message', async message => {
         // Voice only works in guilds, if the message does not come from a guild,
         // we ignore it

@@ -4,7 +4,6 @@ import youtubeDownload from "ytdl-core";
 import config from "./config.json"
 import youtubeStream from "youtube-audio-stream";
 
-const logPrefix = "[" + DateTime.local().toLocaleString(DateTime.DATETIME_MED) + "] ";
 const helpCMD = require('./commands/help');
 
 const client = new Discord.Client();
@@ -16,7 +15,7 @@ const requestList = [];
 
 
 client.once('ready', () => {
-    console.log(`${logPrefix}Up and Running!`);
+    console.log(`${logPrefix()}Up and Running!`);
 });
 
 client.login(config.token);
@@ -27,19 +26,24 @@ client.on('message', async message => {
         if (message.content.includes('.play', 0)) {
             // Only try to join the sender's voice channel if they are in one themselves
             if (message.member.voice.channel) {
-                runPlay(message);
+
+                connection = await message.member.voice.channel.join();
+                if (volumes.findIndex(x => x.serverId === message.guild) === -1) {
+                    volumes.push({serverId: message.guild, volume: 50});
+                }
+
+                await runPlay(
+                    message.content.replace('.play ', ''),
+                    volumes[volumes.findIndex(x => x.serverId === message.guild)].volume,
+                    message.author,
+                    message.channel);
 
                 //TODO Give reactions a reason
                 // await message.react('⏸');
                 // await message.react('🔉');
                 // await message.react('🔊');
 
-                dispatcher.on('finish', () => {
-                    message.react('✅');
-                    if (requestList.length !== 0) {
-                        playAudio(message);
-                    }
-                });
+
 
             } else {
                 message.reply('Bitte join erst einem Voicechannel!');
@@ -81,42 +85,63 @@ client.on('message', async message => {
             connection = null;
         } else if (message.content.includes('.add')) {
             const args = message.content.replace('.add ', '');
-            requestList.push(args);
-            console.info(`${logPrefix}Added Song: ${url.href}, to queue from: ${message.author}`);
+            requestList.push({args: args, author: message.author, channel: message.channel});
+            console.info(`${logPrefix()}Added ${args}, to queue from: ${message.author}`);
 
         }
     }
 );
 
 /**
- * @param {function(*=): void} runnable
+ * @param {Readable} runnable
  */
 function playAudio(runnable, volume) {
     dispatcher = connection.play(runnable, {volume: volume / 100});
 }
 
-async function runPlay(message) {
-    connection = await message.member.voice.channel.join();
-    let args = message.content.replace('.play ', '');
-
-    if (volumes.findIndex(x => x.serverId === message.guild) === -1) {
-        volumes.push({serverId: message.guild, volume: 50});
-    }
-    const volume = volumes[volumes.findIndex(x => x.serverId === message.guild)].volume;
+/**
+ * @param {string} args
+ * @param {int} volume
+ * @param {User} author
+ * @param {TextChannel | DMChannel | NewsChannel} channel
+ */
+async function runPlay(args, volume, author, channel) {
 
     if (args === '🐄') {
         let url = 'https://www.youtube.com/watch?v=lXxUPo9tRao'
     } else if (args.includes('http') || args.includes('https://')) {
 
         let url = new URL(args);
-
         if (url.hostname === 'youtube.com' || url.hostname === 'www.youtube.com') {
             playAudio(youtubeDownload(url.href, {filter: 'audioonly'}), volume);
-            console.info(`${logPrefix}Playing Song: ${url.href}, requested from: ${message.author}`);
+            console.info(`${logPrefix()}Playing Song: ${url.href}`);
         } else if (url.hostname === 'spotify.com') {
 
         }
     }
+
+    dispatcher.on('finish', () => {
+
+        console.info(`${logPrefix()}Finished`);
+
+        if (requestList.length !== 0) {
+            console.info(`${logPrefix()}Continue with queue`);
+            runPlay(requestList[0].args, volume, requestList[0].message, requestList[0].channel);
+            requestList.shift();
+
+            const nowPlayingEmbed = new Discord.MessageEmbed()
+                .setColor('#3bd410')
+                .setTitle('🎶 Now playing:')
+                .setDescription(`${args}`)
+                .setFooter(`Hinzugefügt von ${author.username}`, `${author.avatarURL()}`);
+            channel.send(nowPlayingEmbed);
+
+        }
+    });
+}
+
+function logPrefix() {
+    return "[" + DateTime.local().toLocaleString(DateTime.DATETIME_MED_WITH_SECONDS) + "]";
 }
 
 export default {
